@@ -1,0 +1,131 @@
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+import { Home, Panchanga } from '@/screens';
+
+// Placeholder screens for future implementation
+const StortraScreen = () => (
+  <View style={styles.placeholder}>
+    <Text style={styles.placeholderText}>Stotra</Text>
+    <Text style={styles.placeholderSubText}>Coming Soon</Text>
+  </View>
+);
+
+const VideosScreen = () => (
+  <View style={styles.placeholder}>
+    <Text style={styles.placeholderText}>Videos</Text>
+    <Text style={styles.placeholderSubText}>Coming Soon</Text>
+  </View>
+);
+
+const FeedScreen = () => (
+  <View style={styles.placeholder}>
+    <Text style={styles.placeholderText}>Feed</Text>
+    <Text style={styles.placeholderSubText}>Coming Soon</Text>
+  </View>
+);
+
+type TabParamList = {
+  HomeTab: undefined;
+  PanchangaTab: undefined;
+  StotraTab: undefined;
+  VideosTab: undefined;
+  FeedTab: undefined;
+};
+
+const Tab = createBottomTabNavigator<TabParamList>();
+
+const TAB_ICONS: Record<string, string> = {
+  HomeTab: '🏠',
+  PanchangaTab: '📅',
+  StotraTab: 'ॐ',
+  VideosTab: '▶️',
+  FeedTab: '📋',
+};
+
+const renderTabIcon = (routeName: string, focused: boolean) => (
+  <Text style={[styles.tabIcon, focused && styles.tabIconFocused]}>
+    {TAB_ICONS[routeName] || '•'}
+  </Text>
+);
+
+export const BottomTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused }) => renderTabIcon(route.name, focused),
+        tabBarActiveTintColor: '#D4AF37',
+        tabBarInactiveTintColor: '#9E9E9E',
+        tabBarStyle: styles.tabBar,
+        tabBarLabelStyle: styles.tabLabel,
+      })}
+    >
+      <Tab.Screen 
+        name="HomeTab" 
+        component={Home} 
+        options={{ tabBarLabel: 'Home' }}
+      />
+      <Tab.Screen 
+        name="PanchangaTab" 
+        component={Panchanga}
+        options={{ tabBarLabel: 'Panchanga' }}
+      />
+      <Tab.Screen 
+        name="StotraTab" 
+        component={StortraScreen}
+        options={{ tabBarLabel: 'Stotra' }}
+      />
+      <Tab.Screen 
+        name="VideosTab" 
+        component={VideosScreen}
+        options={{ tabBarLabel: 'Videos' }}
+      />
+      <Tab.Screen 
+        name="FeedTab" 
+        component={FeedScreen}
+        options={{ tabBarLabel: 'Feed' }}
+      />
+    </Tab.Navigator>
+  );
+};
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: '#1A1918',
+    borderTopWidth: 1,
+    borderTopColor: '#2D2A27',
+    paddingTop: 6,
+    paddingBottom: 8,
+    height: 60,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  tabIcon: {
+    fontSize: 20,
+  },
+  tabIconFocused: {
+    transform: [{ scale: 1.1 }],
+  },
+  placeholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1A1918',
+  },
+  placeholderText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  placeholderSubText: {
+    color: '#9E9E9E',
+    fontSize: 14,
+    marginTop: 8,
+  },
+});
+
+export default BottomTabNavigator;

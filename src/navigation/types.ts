@@ -10,4 +10,7 @@ export type RootStackParamList = {
   [Paths.Login]: undefined;
   [Paths.Example]: undefined;
   [Paths.Startup]: undefined;
+  [Paths.MainTabs]: undefined;
+  [Paths.Home]: undefined;
+  [Paths.Panchanga]: undefined;
 };

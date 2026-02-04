@@ -1,7 +1,7 @@
 import type { RootScreenProps } from '@/navigation/types';
 
 import { useEffect } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import { Dimensions, Image, Platform, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   interpolate,
@@ -16,72 +16,103 @@ import Animated, {
 
 import { Paths } from '@/navigation/paths';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// App title letters for animation
-const APP_TITLE = 'PALAYAACHYUTHA';
-const TOTAL_LETTERS = APP_TITLE.length;
+// Sanskrit verse split into two lines
+const LINE_1 = 'वदिराज गुरुं वन्दे';
+const LINE_2 = 'हयग्रीव पदाश्रयम्';
 
-// Divine color palette
+// Divine color palette - Frosted cream with divine gold
 const COLORS = {
-  background: '#FFFEF7', // Light cream
-  textPrimary: '#4A3728', // Warm brown
-  textGold: '#B8920F', // Divine gold
+  background: '#FFF8F0', // Warm cream
+  frostedCream: 'rgba(255, 248, 240, 0.85)', // Frosted overlay
+  textPrimary: '#3A2920', // Deep brown
+  textGold: '#C9A227', // Divine gold
   textAccent: '#800020', // Sacred maroon
+  pixelDot: 'rgba(201, 162, 39, 0.15)', // Subtle gold pixels
 };
 
-interface LetterProps {
-  readonly letter: string;
-  readonly index: number;
-  readonly animationPhase: SharedValue<number>;
-  readonly totalLetters: number;
+interface WordProps {
+  readonly word: string;
+  readonly wordIndex: number;
+  readonly lineIndex: number;
+  readonly animationProgress: SharedValue<number>;
 }
 
-// Individual animated letter component
-function AnimatedLetter({ letter, index, animationPhase, totalLetters }: LetterProps) {
-  const animatedStyle = useAnimatedStyle(() => {
-    const phase = animationPhase.value;
-    
-    // Phase 0-1: Letters unveil from blur (staggered)
-    // Phase 1-2: Letters stay visible
-    // Phase 2-3: Letters fade out one by one (reverse order)
-    
-    const unveilStart = index * 0.03;
-    const unveilEnd = unveilStart + 0.3;
-    
-    const fadeOutStart = 2 + ((totalLetters - 1 - index) * 0.04);
-    const fadeOutEnd = fadeOutStart + 0.15;
-    
-    // Opacity: fade in during unveil, stay visible, fade out
-    let opacity = 0;
-    if (phase < 1) {
-      // Unveil phase
-      opacity = interpolate(phase, [unveilStart, unveilEnd], [0, 1], 'clamp');
-    } else if (phase < 2) {
-      // Stay visible
-      opacity = 1;
-    } else {
-      // Fade out phase
-      opacity = interpolate(phase, [fadeOutStart, fadeOutEnd], [1, 0], 'clamp');
+// Pixelated background component
+function PixelatedBackground() {
+  const pixels = [];
+  const pixelSize = 3;
+  const spacing = 20;
+  
+  for (let x = 0; x < SCREEN_WIDTH / spacing; x++) {
+    for (let y = 0; y < SCREEN_HEIGHT / spacing; y++) {
+      pixels.push(
+        <View
+          key={`pixel-${x}-${y}`}
+          style={[
+            styles.pixel,
+            {
+              left: x * spacing,
+              top: y * spacing,
+              width: pixelSize,
+              height: pixelSize,
+              opacity: Math.random() * 0.3 + 0.1,
+            },
+          ]}
+        />
+      );
     }
+  }
+  
+  return <View style={styles.pixelContainer}>{pixels}</View>;
+}
+
+// Individual animated word component with reveal effect
+function AnimatedWord({ word, wordIndex, lineIndex, animationProgress }: WordProps) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const progress = animationProgress.value;
     
-    // Blur effect (simulated with opacity and scale)
-    const blur = phase < 1 
-      ? interpolate(phase, [unveilStart, unveilEnd], [8, 0], 'clamp')
-      : 0;
+    // Each word reveals sequentially with smooth timing
+    // Word 0: 0-0.25, Word 1: 0.15-0.4, Word 2: 0.3-0.55, etc.
+    const baseDelay = (lineIndex * 3 + wordIndex) * 0.15;
+    const startReveal = baseDelay;
+    const endReveal = startReveal + 0.25;
     
-    // Y translation: drop from above during unveil
-    const translateY = phase < 1
-      ? interpolate(phase, [unveilStart, unveilEnd], [-30, 0], 'clamp')
-      : 0;
+    // Opacity: fade in as text deblurs
+    const opacity = interpolate(
+      progress,
+      [startReveal, endReveal],
+      [0, 1],
+      'clamp'
+    );
     
-    // Scale for blur simulation
-    const scale = phase < 1
-      ? interpolate(phase, [unveilStart, unveilEnd], [1.2, 1], 'clamp')
-      : 1;
+    // Blur simulation: start blurred (using scale and opacity)
+    const blurFactor = interpolate(
+      progress,
+      [startReveal, endReveal],
+      [1, 0],
+      'clamp'
+    );
+    
+    // Reveal from top: translateY movement
+    const translateY = interpolate(
+      progress,
+      [startReveal, endReveal],
+      [-30, 0],
+      'clamp'
+    );
+    
+    // Scale effect for deblur simulation
+    const scale = interpolate(
+      progress,
+      [startReveal, endReveal],
+      [1.15, 1],
+      'clamp'
+    );
     
     return {
-      opacity,
+      opacity: opacity * (1 - blurFactor * 0.5),
       transform: [
         { translateY },
         { scale },
@@ -90,186 +121,189 @@ function AnimatedLetter({ letter, index, animationPhase, totalLetters }: LetterP
   });
 
   return (
-    <Animated.Text style={[styles.letter, animatedStyle]}>
-      {letter}
+    <Animated.Text style={[styles.word, animatedStyle]}>
+      {word}
     </Animated.Text>
   );
 }
 
+interface TextLineProps {
+  readonly line: string;
+  readonly lineIndex: number;
+  readonly animationProgress: SharedValue<number>;
+}
+
+// Animated line with words
+function AnimatedLine({ line, lineIndex, animationProgress }: TextLineProps) {
+  const words = line.split(' ');
+  
+  return (
+    <View style={styles.lineContainer}>
+      {words.map((word, index) => (
+        <AnimatedWord
+          key={`${lineIndex}-${index}-${word}`}
+          word={word}
+          wordIndex={index}
+          lineIndex={lineIndex}
+          animationProgress={animationProgress}
+        />
+      ))}
+    </View>
+  );
+}
+
 // Logo component with animation
-function AnimatedLogo({ animationPhase }: Readonly<{ animationPhase: SharedValue<number> }>) {
+function AnimatedLogo({ animationProgress }: Readonly<{ animationProgress: SharedValue<number> }>) {
   const animatedStyle = useAnimatedStyle(() => {
-    const phase = animationPhase.value;
+    const progress = animationProgress.value;
     
-    // Logo appears from below during phase 2-2.5
-    // Moves to header position during phase 2.5-3.5
-    
-    // Opacity: fade in during phase 2-2.3
-    const opacity = interpolate(phase, [2, 2.3], [0, 1], 'clamp');
-    
-    // Y position: start below center, move to center, then to top
-    let translateY = SCREEN_HEIGHT * 0.3; // Start position (below visible area)
-    
-    if (phase >= 2 && phase < 2.8) {
-      // Rise to center
-      translateY = interpolate(
-        phase, 
-        [2, 2.8], 
-        [SCREEN_HEIGHT * 0.3, 0], 
-        'clamp'
-      );
-    } else if (phase >= 2.8 && phase < 3) {
-      // Pause at center
-      translateY = 0;
-    } else if (phase >= 3) {
-      // Move to header
-      translateY = interpolate(
-        phase, 
-        [3, 3.5], 
-        [0, -SCREEN_HEIGHT * 0.35], 
-        'clamp'
-      );
-    }
-    
-    // Scale: slightly larger when arriving, then normalize
-    const scale = phase < 2.8
-      ? interpolate(phase, [2, 2.5], [0.8, 1], 'clamp')
-      : interpolate(phase, [3, 3.5], [1, 0.6], 'clamp');
+    // Logo fades in after text is fully revealed
+    const opacity = interpolate(progress, [0.8, 1], [0, 1], 'clamp');
+    const scale = interpolate(progress, [0.8, 1], [0.9, 1], 'clamp');
+    const translateY = interpolate(progress, [0.8, 1], [10, 0], 'clamp');
     
     return {
       opacity,
       transform: [
-        { translateY },
         { scale },
+        { translateY },
       ],
     };
   });
 
   return (
     <Animated.View style={[styles.logoContainer, animatedStyle]}>
-      {/* ॐ Symbol - Divine Sanskrit */}
-      <Animated.Text style={styles.logoSymbol}>ॐ</Animated.Text>
-      <Animated.Text style={styles.logoSubtext}>श्री पालयाच्युत</Animated.Text>
+      <Image
+        source={require('../../../assets/logo.png')}
+        style={styles.logoImage}
+        resizeMode="contain"
+      />
     </Animated.View>
   );
 }
 
-function SplashScreen({ navigation }: Readonly<RootScreenProps<Paths.Splash>>) {
-  const animationPhase = useSharedValue(0);
-  const letters = APP_TITLE.split('');
-  
-  const navigateToLogin = () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: Paths.Login }],
-    });
+interface SplashScreenProps extends RootScreenProps<Paths.Splash> {
+  onAnimationComplete?: () => void;
+}
+
+function SplashScreen({ navigation, onAnimationComplete }: Readonly<SplashScreenProps>) {
+  const animationProgress = useSharedValue(0);
+
+  const handleAnimationComplete = () => {
+    onAnimationComplete?.();
   };
 
   useEffect(() => {
-    // Start the cinematic animation sequence
-    animationPhase.value = withSequence(
-      // Phase 0-1: Letters unveil (1.5s)
+    // Smooth text reveal animation followed by logo
+    animationProgress.value = withSequence(
+      // Text reveals word by word (2.5s)
       withTiming(1, { 
-        duration: 1500, 
-        easing: Easing.bezier(0.25, 0.1, 0.25, 1) 
+        duration: 2500, 
+        easing: Easing.bezier(0.4, 0, 0.2, 1) 
       }),
-      // Phase 1-2: Hold visible (0.8s)
+      // Hold for logo display (0.8s), then call completion
       withDelay(
         800,
-        withTiming(2, { duration: 0 })
-      ),
-      // Phase 2-3: Letters fade, logo rises (1.8s)
-      withTiming(3, { 
-        duration: 1800, 
-        easing: Easing.bezier(0.4, 0, 0.2, 1) 
-      }),
-      // Phase 3-3.5: Logo moves to header (1s)
-      withTiming(3.5, { 
-        duration: 1000, 
-        easing: Easing.bezier(0.4, 0, 0.2, 1) 
-      }),
-      // Final pause before navigation
-      withDelay(
-        300,
-        withTiming(4, { 
+        withTiming(1.1, { 
           duration: 0 
         }, () => {
-          runOnJS(navigateToLogin)();
+          runOnJS(handleAnimationComplete)();
         })
       )
     );
   }, []);
 
-  // Background fade animation for transition
+  // Background with frosted cream effect
   const backgroundStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      animationProgress.value,
+      [0, 0.3],
+      [0, 1],
+      'clamp'
+    );
+    
     return {
-      backgroundColor: COLORS.background,
+      opacity,
     };
   });
 
   return (
-    <Animated.View style={[styles.container, backgroundStyle]}>
-      {/* Title letters container */}
-      <View style={styles.titleContainer}>
-        <View style={styles.lettersRow}>
-          {letters.map((letter, index) => (
-            <AnimatedLetter
-              key={`${letter}-${index}`}
-              letter={letter}
-              index={index}
-              animationPhase={animationPhase}
-              totalLetters={TOTAL_LETTERS}
-            />
-          ))}
-        </View>
-      </View>
+    <View style={styles.container}>
+      {/* Pixelated background layer */}
+      <PixelatedBackground />
       
-      {/* Logo */}
-      <AnimatedLogo animationPhase={animationPhase} />
-    </Animated.View>
+      {/* Frosted glass overlay */}
+      <Animated.View style={[styles.frostedOverlay, backgroundStyle]} />
+      
+      {/* Main content */}
+      <View style={styles.contentContainer}>
+        <View style={styles.textContainer}>
+          <AnimatedLine 
+            line={LINE_1} 
+            lineIndex={0} 
+            animationProgress={animationProgress} 
+          />
+          <AnimatedLine 
+            line={LINE_2} 
+            lineIndex={1} 
+            animationProgress={animationProgress} 
+          />
+        </View>
+        
+        <AnimatedLogo animationProgress={animationProgress} />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: COLORS.background,
   },
-  titleContainer: {
+  pixelContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  pixel: {
     position: 'absolute',
+    backgroundColor: COLORS.pixelDot,
+    borderRadius: 1.5,
+  },
+  frostedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.frostedCream,
+  },
+  contentContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  lettersRow: {
+  textContainer: {
+    alignItems: 'center',
+    marginBottom: 60,
+  },
+  lineContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    marginVertical: 8,
   },
-  letter: {
+  word: {
     fontSize: 32,
-    fontWeight: '300',
-    letterSpacing: 4,
+    fontWeight: '400',
     color: COLORS.textPrimary,
-    fontFamily: 'System', // Will be replaced with custom font
+    marginHorizontal: 8,
+    letterSpacing: 1.5,
+    // Use Devanagari-friendly font
+    fontFamily: Platform.OS === 'ios' ? 'Kohinoor Devanagari' : 'Noto Sans Devanagari',
   },
   logoContainer: {
     position: 'absolute',
-    justifyContent: 'center',
+    bottom: SCREEN_HEIGHT * 0.15,
     alignItems: 'center',
   },
-  logoSymbol: {
-    fontSize: 72,
-    color: COLORS.textGold,
-    fontWeight: '200',
-  },
-  logoSubtext: {
-    fontSize: 18,
-    color: COLORS.textAccent,
-    fontWeight: '400',
-    marginTop: 8,
-    letterSpacing: 2,
+  logoImage: {
+    width: 100,
+    height: 100,
   },
 });
 

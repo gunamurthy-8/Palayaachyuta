@@ -1,0 +1,1 @@
+export { DarshanTimingsCard } from './DarshanTimings';

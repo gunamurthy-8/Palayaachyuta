@@ -79,3 +79,11 @@ yarn-error.log
 
 # vscode
 .vscode/*
+
+# Firebase
+google-services.json
+GoogleService-Info.plist
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

@@ -3,7 +3,9 @@ import type { RootScreenProps } from '@/navigation/types';
 import { useRef, useState } from 'react';
 import {
   Dimensions,
+  Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -17,31 +19,62 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
+  SlideInDown,
 } from 'react-native-reanimated';
+import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 import { Paths } from '@/navigation/paths';
+import { firebaseAuth } from '@/services/firebase';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Divine color palette
+// Divine color palette - matching splash screen
 const COLORS = {
-  background: '#FFFEF7',
-  cream100: '#FFF9E8',
-  cream200: '#F5EFE0',
-  gold500: '#C9A227',
-  gold600: '#B8920F',
-  maroon500: '#800020',
-  maroon600: '#6B001A',
-  brown500: '#6B5344',
-  brown700: '#4A3728',
-  brown800: '#3A2A1E',
-  gray400: '#9E9E9E',
-  gray600: '#757575',
+  background: '#FFF8F0',
+  cream: '#FFF9E8',
+  creamDark: '#F5EFE0',
+  gold: '#C9A227',
+  goldDark: '#B8920F',
+  maroon: '#800020',
+  maroonDark: '#6B001A',
+  brown: '#6B5344',
+  brownDark: '#4A3728',
+  brownDeep: '#3A2920',
+  gray: '#9E9E9E',
+  grayLight: '#E0E0E0',
   white: '#FFFFFF',
   error: '#C13333',
+  pixelDot: 'rgba(201, 162, 39, 0.08)',
 };
+
+// Pixelated background
+function PixelatedBackground() {
+  const pixels = [];
+  const pixelSize = 2.5;
+  const spacing = 18;
+  
+  for (let x = 0; x < SCREEN_WIDTH / spacing; x++) {
+    for (let y = 0; y < SCREEN_HEIGHT / spacing; y++) {
+      pixels.push(
+        <View
+          key={`pixel-${x}-${y}`}
+          style={[
+            styles.pixel,
+            {
+              left: x * spacing,
+              top: y * spacing,
+              width: pixelSize,
+              height: pixelSize,
+              opacity: Math.random() * 0.25 + 0.05,
+            },
+          ]}
+        />
+      );
+    }
+  }
+  
+  return <View style={styles.pixelContainer}>{pixels}</View>;
+}
 
 interface OTPInputProps {
   readonly value: string;
@@ -49,7 +82,7 @@ interface OTPInputProps {
   readonly onComplete: (otp: string) => void;
 }
 
-// OTP Input Component
+// OTP Input Component - Divine styling
 function OTPInput({ value, onChange, onComplete }: OTPInputProps) {
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -99,11 +132,100 @@ function OTPInput({ value, onChange, onComplete }: OTPInputProps) {
             onKeyPress={(e) => handleKeyPress(e, index)}
             onFocus={() => setFocusedIndex(index)}
             onBlur={() => setFocusedIndex(-1)}
-            selectionColor={COLORS.gold600}
+            selectionColor={COLORS.gold}
           />
         </Animated.View>
       ))}
     </View>
+  );
+}
+
+// Privacy Policy Modal
+interface PolicyModalProps {
+  readonly visible: boolean;
+  readonly onClose: () => void;
+  readonly type: 'privacy' | 'terms';
+}
+
+function PolicyModal({ visible, onClose, type }: PolicyModalProps) {
+  const title = type === 'privacy' ? 'Privacy Policy' : 'Terms & Conditions';
+  const content = type === 'privacy' 
+    ? `Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect your personal information when you use our mobile application.
+
+Information We Collect:
+• Mobile phone number for authentication
+• Device information for security purposes
+• Usage data to improve our services
+
+How We Use Your Information:
+• To authenticate and verify your identity
+• To provide and maintain our services
+• To communicate with you about updates and features
+
+Data Security:
+We implement appropriate security measures to protect your personal information from unauthorized access, alteration, or disclosure.
+
+Your Rights:
+You have the right to access, update, or delete your personal information at any time.
+
+Contact Us:
+If you have any questions about this Privacy Policy, please contact us at privacy@sodemutt.org`
+    : `Welcome to our application. By using this app, you agree to these Terms & Conditions.
+
+Acceptance of Terms:
+By accessing and using this application, you accept and agree to be bound by the terms and conditions of this agreement.
+
+User Responsibilities:
+• Provide accurate and complete information during registration
+• Maintain the confidentiality of your account
+• Use the application only for lawful purposes
+
+Service Usage:
+• This app is for devotional and spiritual purposes
+• Users must respect the sacred nature of the content
+• Misuse of the application may result in account termination
+
+Modifications:
+We reserve the right to modify these terms at any time. Continued use of the app constitutes acceptance of modified terms.
+
+Limitation of Liability:
+The application is provided "as is" without warranties of any kind.
+
+Contact:
+For questions about these Terms, contact us at support@sodemutt.org`;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <Animated.View 
+          entering={SlideInDown.springify()}
+          style={styles.modalContent}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+              <Text style={styles.modalCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView 
+            style={styles.modalBody}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.modalText}>{content}</Text>
+          </ScrollView>
+          
+          <TouchableOpacity style={styles.modalButton} onPress={onClose}>
+            <Text style={styles.modalButtonText}>I Understand</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
@@ -114,12 +236,18 @@ function LoginScreen({ navigation }: Readonly<RootScreenProps<Paths.Login>>) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [policyType, setPolicyType] = useState<'privacy' | 'terms'>('privacy');
+  const [confirmation, setConfirmation] = useState<FirebaseAuthTypes.ConfirmationResult | null>(null);
   
-  const logoPosition = useSharedValue(0);
+  const handleOpenPolicy = (type: 'privacy' | 'terms') => {
+    setPolicyType(type);
+    setShowPolicyModal(true);
+  };
   
-  const handleSendOTP = () => {
+  const handleSendOTP = async () => {
     if (!acceptedTerms) {
-      setError('Please accept Terms & Conditions');
+      setError('Please accept Terms & Conditions and Privacy Policy');
       return;
     }
     
@@ -131,67 +259,89 @@ function LoginScreen({ navigation }: Readonly<RootScreenProps<Paths.Login>>) {
     setError('');
     setIsLoading(true);
     
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const confirmResult = await firebaseAuth.sendOTP(phoneNumber);
+      setConfirmation(confirmResult);
       setShowOTP(true);
-    }, 1500);
+      setIsLoading(false);
+    } catch (err) {
+      setIsLoading(false);
+      setError(err instanceof Error ? err.message : 'Failed to send OTP');
+    }
   };
   
-  const handleVerifyOTP = (otpValue: string) => {
-    if (otpValue.length !== 6) return;
+  const handleVerifyOTP = async (otpValue: string) => {
+    if (otpValue.length !== 6 || !confirmation) return;
     
     setIsLoading(true);
     
-    setTimeout(() => {
+    try {
+      await firebaseAuth.verifyOTP(otpValue, confirmation);
+      
+      // Successfully authenticated - AuthContext will detect the state change
+      // and automatically switch to the MainStack (no manual navigation needed)
       setIsLoading(false);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: Paths.Example }],
-      });
-    }, 1000);
+    } catch (err) {
+      setIsLoading(false);
+      setError(err instanceof Error ? err.message : 'Invalid OTP');
+      setOtp('');
+    }
   };
   
-  const handleResendOTP = () => {
+  const handleResendOTP = async () => {
     setOtp('');
+    setError('');
     setIsLoading(true);
-    setTimeout(() => {
+    
+    try {
+      const confirmResult = await firebaseAuth.sendOTP(phoneNumber);
+      setConfirmation(confirmResult);
       setIsLoading(false);
-    }, 1000);
+    } catch (err) {
+      setIsLoading(false);
+      setError(err instanceof Error ? err.message : 'Failed to resend OTP');
+    }
   };
-
-  const logoAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: logoPosition.value }],
-  }));
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <PixelatedBackground />
+      
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Divine Header */}
         <Animated.View 
-          style={[styles.header, logoAnimatedStyle]}
+          style={styles.header}
           entering={FadeInDown.duration(800).springify()}
         >
-          <Text style={styles.logoSymbol}>ॐ</Text>
-          <Text style={styles.logoText}>श्री पालयाच्युत</Text>
-          <Text style={styles.logoSubtext}>PALAYAACHYUTHA</Text>
+          <Image
+            source={require('../../../assets/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.appName}>वदिराज गुरुं वन्दे</Text>
+          <Text style={styles.appSubtitle}>हयग्रीव पदाश्रयम्</Text>
         </Animated.View>
 
+        {/* Main Content Card */}
         <Animated.View 
-          style={styles.content}
+          style={styles.card}
           entering={FadeInUp.delay(300).duration(600)}
         >
           {showOTP ? (
-            <Animated.View 
-              style={styles.section}
-              entering={FadeInUp.springify()}
-            >
-              <Text style={styles.title}>Verification</Text>
+            // OTP Verification Screen
+            <View style={styles.section}>
+              <View style={styles.titleSection}>
+                <Text style={styles.titleMain}>Verification</Text>
+                <Text style={styles.titleAccent}>कृपया ओटीपी दर्ज करें</Text>
+              </View>
+              
               <Text style={styles.subtitle}>
                 Enter the 6-digit code sent to{'\n'}
                 <Text style={styles.phoneHighlight}>+91 {phoneNumber}</Text>
@@ -219,7 +369,10 @@ function LoginScreen({ navigation }: Readonly<RootScreenProps<Paths.Login>>) {
                 disabled={otp.length !== 6 || isLoading}
                 activeOpacity={0.8}
               >
-                <Text style={styles.buttonText}>
+                <Text style={[
+                  styles.buttonText,
+                  (otp.length !== 6 || isLoading) && styles.buttonTextDisabled
+                ]}>
                   {isLoading ? 'Verifying...' : 'Verify & Continue'}
                 </Text>
               </TouchableOpacity>
@@ -231,16 +384,22 @@ function LoginScreen({ navigation }: Readonly<RootScreenProps<Paths.Login>>) {
                   setOtp('');
                 }}
               >
-                <Text style={styles.changeNumberText}>Change mobile number</Text>
+                <Text style={styles.changeNumberText}>← Change mobile number</Text>
               </TouchableOpacity>
-            </Animated.View>
+            </View>
           ) : (
+            // Phone Number Input Screen
             <View style={styles.section}>
-              <Text style={styles.title}>Welcome</Text>
+              <View style={styles.titleSection}>
+                <Text style={styles.titleMain}>Welcome</Text>
+                <Text style={styles.titleAccent}>स्वागतम्</Text>
+              </View>
+              
               <Text style={styles.subtitle}>
-                Enter your mobile number to continue
+                Enter your mobile number to begin your spiritual journey
               </Text>
               
+              {/* Phone Input */}
               <View style={styles.phoneInputContainer}>
                 <View style={styles.countryCode}>
                   <Text style={styles.countryCodeText}>+91</Text>
@@ -248,15 +407,15 @@ function LoginScreen({ navigation }: Readonly<RootScreenProps<Paths.Login>>) {
                 <TextInput
                   style={styles.phoneInput}
                   placeholder="Mobile Number"
-                  placeholderTextColor={COLORS.gray400}
+                  placeholderTextColor={COLORS.gray}
                   keyboardType="phone-pad"
                   maxLength={10}
                   value={phoneNumber}
                   onChangeText={(text) => {
-                    setPhoneNumber(text.replace(/\D/g, ''));
+                    setPhoneNumber(text.replaceAll(/\D/g, ''));
                     setError('');
                   }}
-                  selectionColor={COLORS.gold600}
+                  selectionColor={COLORS.gold}
                 />
               </View>
 
@@ -266,6 +425,7 @@ function LoginScreen({ navigation }: Readonly<RootScreenProps<Paths.Login>>) {
                 </Animated.Text>
               ) : null}
 
+              {/* Terms & Conditions Checkbox */}
               <Pressable
                 style={styles.termsContainer}
                 onPress={() => setAcceptedTerms(!acceptedTerms)}
@@ -278,22 +438,42 @@ function LoginScreen({ navigation }: Readonly<RootScreenProps<Paths.Login>>) {
                 </View>
                 <Text style={styles.termsText}>
                   I agree to the{' '}
-                  <Text style={styles.link}>Terms & Conditions</Text>
+                  <Text 
+                    style={styles.link}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleOpenPolicy('terms');
+                    }}
+                  >
+                    Terms & Conditions
+                  </Text>
                   {' '}and{' '}
-                  <Text style={styles.link}>Privacy Policy</Text>
+                  <Text 
+                    style={styles.link}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleOpenPolicy('privacy');
+                    }}
+                  >
+                    Privacy Policy
+                  </Text>
                 </Text>
               </Pressable>
 
+              {/* Send OTP Button */}
               <TouchableOpacity
                 style={[
                   styles.button,
-                  (!phoneNumber || isLoading) && styles.buttonDisabled
+                  (!phoneNumber || isLoading || !acceptedTerms) && styles.buttonDisabled
                 ]}
                 onPress={handleSendOTP}
-                disabled={!phoneNumber || isLoading}
+                disabled={!phoneNumber || isLoading || !acceptedTerms}
                 activeOpacity={0.8}
               >
-                <Text style={styles.buttonText}>
+                <Text style={[
+                  styles.buttonText,
+                  (!phoneNumber || isLoading || !acceptedTerms) && styles.buttonTextDisabled
+                ]}>
                   {isLoading ? 'Sending...' : 'Send OTP'}
                 </Text>
               </TouchableOpacity>
@@ -301,12 +481,20 @@ function LoginScreen({ navigation }: Readonly<RootScreenProps<Paths.Login>>) {
           )}
         </Animated.View>
 
+        {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            By continuing, you agree to our Terms of Service
+            श्री वदिराज गुरु पादुकाभ्यां नमः
           </Text>
         </View>
       </ScrollView>
+      
+      {/* Policy Modal */}
+      <PolicyModal
+        visible={showPolicyModal}
+        onClose={() => setShowPolicyModal(false)}
+        type={policyType}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -316,65 +504,86 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  pixelContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  pixel: {
+    position: 'absolute',
+    backgroundColor: COLORS.pixelDot,
+    borderRadius: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
   header: {
     alignItems: 'center',
     paddingTop: SCREEN_HEIGHT * 0.08,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
-  logoSymbol: {
-    fontSize: 56,
-    color: COLORS.gold600,
-    fontWeight: '200',
+  logo: {
+    width: 80,
+    height: 80,
+    marginBottom: 16,
   },
-  logoText: {
-    fontSize: 20,
-    color: COLORS.maroon500,
+  appName: {
+    fontSize: 24,
     fontWeight: '500',
-    marginTop: 8,
+    color: COLORS.brownDeep,
+    marginTop: 12,
     letterSpacing: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Kohinoor Devanagari' : 'Noto Sans Devanagari',
   },
-  logoSubtext: {
-    fontSize: 12,
-    color: COLORS.brown500,
+  appSubtitle: {
+    fontSize: 18,
     fontWeight: '400',
+    color: COLORS.maroon,
     marginTop: 4,
-    letterSpacing: 4,
+    letterSpacing: 0.8,
+    fontFamily: Platform.OS === 'ios' ? 'Kohinoor Devanagari' : 'Noto Sans Devanagari',
   },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: 28,
+    padding: 28,
+    marginBottom: 24,
+    shadowColor: COLORS.brownDark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
   },
   section: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: COLORS.brown700,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
+    width: '100%',
   },
-  title: {
-    fontSize: 28,
+  titleSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  titleMain: {
+    fontSize: 36,
     fontWeight: '600',
-    color: COLORS.brown800,
-    textAlign: 'center',
-    marginBottom: 8,
+    color: COLORS.brownDeep,
+    letterSpacing: -0.5,
+  },
+  titleAccent: {
+    fontSize: 20,
+    fontWeight: '400',
+    color: COLORS.gold,
+    marginTop: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Kohinoor Devanagari' : 'Noto Sans Devanagari',
   },
   subtitle: {
     fontSize: 15,
-    color: COLORS.gray600,
+    color: COLORS.brown,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 22,
   },
   phoneHighlight: {
-    color: COLORS.brown700,
-    fontWeight: '600',
+    color: COLORS.brownDark,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   phoneInputContainer: {
     flexDirection: 'row',
@@ -382,117 +591,134 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   countryCode: {
-    backgroundColor: COLORS.cream200,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: COLORS.creamDark,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    borderRadius: 14,
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
   },
   countryCodeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.brown700,
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.brownDark,
   },
   phoneInput: {
     flex: 1,
-    backgroundColor: COLORS.cream100,
+    backgroundColor: COLORS.cream,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    fontSize: 18,
-    fontWeight: '500',
-    color: COLORS.brown800,
-    letterSpacing: 2,
+    paddingVertical: 18,
+    borderRadius: 14,
+    fontSize: 17,
+    fontWeight: '600',
+    color: COLORS.brownDeep,
+    letterSpacing: 1.5,
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
   },
   errorText: {
     color: COLORS.error,
     fontSize: 13,
     marginBottom: 16,
     textAlign: 'center',
+    fontWeight: '500',
   },
   termsContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 28,
     paddingHorizontal: 4,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 7,
     borderWidth: 2,
-    borderColor: COLORS.gray400,
+    borderColor: COLORS.gray,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 2,
   },
   checkboxChecked: {
-    backgroundColor: COLORS.gold600,
-    borderColor: COLORS.gold600,
+    backgroundColor: COLORS.gold,
+    borderColor: COLORS.gold,
   },
   checkmark: {
     color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
   termsText: {
     flex: 1,
     fontSize: 13,
-    color: COLORS.gray600,
+    color: COLORS.brown,
     lineHeight: 20,
   },
   link: {
-    color: COLORS.maroon500,
-    fontWeight: '600',
+    color: COLORS.maroon,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   button: {
-    backgroundColor: COLORS.maroon500,
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: COLORS.maroon,
+    paddingVertical: 18,
+    borderRadius: 14,
     alignItems: 'center',
-    shadowColor: COLORS.maroon600,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: COLORS.maroonDark,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
   buttonDisabled: {
-    backgroundColor: COLORS.cream200,
+    backgroundColor: COLORS.creamDark,
     shadowOpacity: 0,
     elevation: 0,
   },
   buttonText: {
     color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  buttonTextDisabled: {
+    color: COLORS.gray,
   },
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 28,
+    paddingHorizontal: 4,
   },
   otpBox: {
-    width: 48,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: COLORS.cream100,
+    width: 50,
+    height: 60,
+    borderRadius: 14,
+    backgroundColor: COLORS.cream,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: COLORS.grayLight,
   },
   otpBoxFocused: {
-    borderColor: COLORS.gold500,
+    borderColor: COLORS.gold,
     backgroundColor: COLORS.white,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   otpBoxFilled: {
-    backgroundColor: COLORS.cream200,
+    backgroundColor: COLORS.creamDark,
+    borderColor: COLORS.brownDark,
   },
   otpInput: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: COLORS.brown800,
+    fontSize: 26,
+    fontWeight: '700',
+    color: COLORS.brownDeep,
     textAlign: 'center',
     width: '100%',
     height: '100%',
@@ -500,34 +726,102 @@ const styles = StyleSheet.create({
   resendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
   },
   resendText: {
     fontSize: 14,
-    color: COLORS.gray600,
+    color: COLORS.brown,
   },
   resendLink: {
     fontSize: 14,
-    color: COLORS.maroon500,
-    fontWeight: '600',
+    color: COLORS.maroon,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   changeNumber: {
-    marginTop: 16,
+    marginTop: 20,
     alignItems: 'center',
   },
   changeNumberText: {
-    fontSize: 14,
-    color: COLORS.gray600,
-    textDecorationLine: 'underline',
+    fontSize: 15,
+    color: COLORS.brown,
+    fontWeight: '500',
   },
   footer: {
-    paddingVertical: 24,
+    paddingVertical: 28,
     alignItems: 'center',
   },
   footerText: {
-    fontSize: 12,
-    color: COLORS.gray400,
+    fontSize: 14,
+    color: COLORS.gold,
     textAlign: 'center',
+    fontWeight: '500',
+    letterSpacing: 0.5,
+    fontFamily: Platform.OS === 'ios' ? 'Kohinoor Devanagari' : 'Noto Sans Devanagari',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(58, 41, 32, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: SCREEN_HEIGHT * 0.85,
+    paddingTop: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayLight,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.brownDeep,
+  },
+  modalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.creamDark,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 20,
+    color: COLORS.brownDark,
+    fontWeight: '600',
+  },
+  modalBody: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    maxHeight: SCREEN_HEIGHT * 0.6,
+  },
+  modalText: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: COLORS.brownDark,
+  },
+  modalButton: {
+    backgroundColor: COLORS.maroon,
+    marginHorizontal: 24,
+    marginBottom: 24,
+    marginTop: 12,
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: '700',
   },
 });
 
