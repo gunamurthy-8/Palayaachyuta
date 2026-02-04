@@ -1,0 +1,1 @@
+export { GuruDetailCard } from './GuruDetailCard';

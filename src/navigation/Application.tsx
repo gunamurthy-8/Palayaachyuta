@@ -10,7 +10,20 @@ import { useAuth } from '@/context/AuthContext';
 import { Paths } from '@/navigation/paths';
 import { useTheme } from '@/theme';
 
-import { Example, Login, Splash, Startup } from '@/screens';
+import { 
+  Example, 
+  Login, 
+  Splash, 
+  Startup, 
+  GuruDetailScreen,
+  GalleryScreen,
+  AlbumDetailScreen,
+  ArtefactsScreen,
+  ArtefactDetailScreen,
+  RoomBookingScreen,
+  SevasScreen,
+  DevoteeFormScreen,
+} from '@/screens';
 import { BottomTabNavigator } from '@/navigation/BottomTabNavigator';
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -56,6 +69,14 @@ function ApplicationNavigator() {
             // Authenticated - show main app
             <>
               <Stack.Screen component={BottomTabNavigator} name={Paths.MainTabs} />
+              <Stack.Screen component={GuruDetailScreen} name="GuruDetail" />
+              <Stack.Screen component={GalleryScreen} name="Gallery" />
+              <Stack.Screen component={AlbumDetailScreen} name="AlbumDetail" />
+              <Stack.Screen component={ArtefactsScreen} name="Artefacts" />
+              <Stack.Screen component={ArtefactDetailScreen} name="ArtefactDetail" />
+              <Stack.Screen component={RoomBookingScreen} name="RoomBooking" />
+              <Stack.Screen component={SevasScreen} name="Sevas" />
+              <Stack.Screen component={DevoteeFormScreen} name="DevoteeForm" />
               <Stack.Screen component={Example} name={Paths.Example} />
             </>
           ) : (

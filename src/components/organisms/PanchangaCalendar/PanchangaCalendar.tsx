@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { CalendarEvent, PanchangaData } from '@/types';
@@ -12,18 +12,18 @@ interface PanchangaCalendarProps {
   onEventPress?: (event: CalendarEvent) => void;
 }
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+const WEEKDAYS_SHORT = ['ಭಾ', 'ಸೋ', 'ಮಂ', 'ಬು', 'ಗು', 'ಶು', 'ಶ'];
+const WEEKDAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS_KN = [
+  'ಜನವರಿ', 'ಫೆಬ್ರವರಿ', 'ಮಾರ್ಚ್', 'ಏಪ್ರಿಲ್', 'ಮೇ', 'ಜೂನ್',
+  'ಜುಲೈ', 'ಆಗಸ್ಟ್', 'ಸೆಪ್ಟೆಂಬರ್', 'ಅಕ್ಟೋಬರ್', 'ನವೆಂಬರ್', 'ಡಿಸೆಂಬರ್'
 ];
 
-const FILTER_TABS: { key: FilterType; label: string; labelKannada?: string }[] = [
-  { key: 'all', label: 'All', labelKannada: 'ಅದ್ಯ' },
-  { key: 'aradhana', label: 'Aradhana', labelKannada: 'ಆರಾಧನೆ' },
-  { key: 'ekadashi', label: 'Ekadashi', labelKannada: 'ಏಕಾದಶಿ' },
-  { key: 'habba', label: 'Festivals', labelKannada: 'ಹಬ್ಬಗಳು' },
-  { key: 'other', label: 'Other', labelKannada: 'ಇತರ' },
+const FILTER_CHIPS: { key: FilterType; label: string; icon: string }[] = [
+  { key: 'all', label: 'All', icon: '📿' },
+  { key: 'aradhana', label: 'Aradhana', icon: '🙏' },
+  { key: 'ekadashi', label: 'Ekadashi', icon: '🌙' },
+  { key: 'habba', label: 'Festivals', icon: '🎉' },
 ];
 
 export const PanchangaCalendar: React.FC<PanchangaCalendarProps> = ({
@@ -36,7 +36,7 @@ export const PanchangaCalendar: React.FC<PanchangaCalendarProps> = ({
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [viewMode, setViewMode] = useState<'month' | '2weeks'>('month');
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Get panchanga for selected date
   const selectedPanchanga = useMemo(() => getPanchangaForDate(selectedDate), [selectedDate]);
@@ -59,29 +59,19 @@ export const PanchangaCalendar: React.FC<PanchangaCalendarProps> = ({
     });
   }, [filteredEvents]);
 
-  // Generate calendar days
-  const calendarDays = useMemo(() => {
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
-    const startPadding = firstDay.getDay();
-    const totalDays = lastDay.getDate();
-
-    const days: (Date | null)[] = [];
+  // Generate week strip (7 days centered on today)
+  const weekStrip = useMemo(() => {
+    const days: Date[] = [];
+    const startOfWeek = new Date(currentYear, currentMonth, 1);
+    const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
     
-    // Padding for start of month
-    for (let i = 0; i < startPadding; i++) {
-      days.push(null);
+    for (let d = new Date(startOfWeek); d <= endOfMonth; d.setDate(d.getDate() + 1)) {
+      days.push(new Date(d));
     }
-    
-    // Actual days
-    for (let i = 1; i <= totalDays; i++) {
-      days.push(new Date(currentYear, currentMonth, i));
-    }
-
     return days;
   }, [currentMonth, currentYear]);
 
-  // Navigation handlers
+  // Navigation
   const goToPrevMonth = () => {
     if (currentMonth === 0) {
       setCurrentMonth(11);
@@ -122,171 +112,229 @@ export const PanchangaCalendar: React.FC<PanchangaCalendarProps> = ({
     );
   };
 
+  const selectedDateEvents = getEventsForDate(selectedDate);
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Filter Tabs */}
+      {/* Month Header - Elegant Design */}
+      <View style={styles.monthHeaderSection}>
+        <View style={styles.monthHeaderRow}>
+          <Pressable onPress={goToPrevMonth} style={styles.navArrow}>
+            <Text style={styles.navArrowText}>‹</Text>
+          </Pressable>
+          
+          <View style={styles.monthTitleContainer}>
+            <Text style={styles.monthTitleKn}>{MONTHS_KN[currentMonth]}</Text>
+            <Text style={styles.yearTitle}>{currentYear}</Text>
+          </View>
+          
+          <Pressable onPress={goToNextMonth} style={styles.navArrow}>
+            <Text style={styles.navArrowText}>›</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Horizontal Week Strip Calendar */}
+      <View style={styles.weekStripContainer}>
+        <ScrollView 
+          ref={scrollViewRef}
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.weekStripContent}
+        >
+          {weekStrip.map((date) => {
+            const dayEvents = getEventsForDate(date);
+            const hasEvent = dayEvents.length > 0;
+            const selected = isSelected(date);
+            const isTodayDate = isToday(date);
+
+            return (
+              <Pressable
+                key={date.toISOString()}
+                style={[
+                  styles.dayPill,
+                  selected && styles.dayPillSelected,
+                  isTodayDate && !selected && styles.dayPillToday,
+                ]}
+                onPress={() => handleDatePress(date)}
+              >
+                <Text style={[
+                  styles.dayPillWeekday,
+                  selected && styles.dayPillTextSelected,
+                ]}>
+                  {WEEKDAYS_SHORT[date.getDay()]}
+                </Text>
+                <Text style={[
+                  styles.dayPillNumber,
+                  selected && styles.dayPillTextSelected,
+                  isTodayDate && !selected && styles.dayPillNumberToday,
+                ]}>
+                  {date.getDate()}
+                </Text>
+                {hasEvent && (
+                  <View style={[
+                    styles.eventIndicator,
+                    selected && styles.eventIndicatorSelected,
+                  ]} />
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Filter Chips - Horizontal Scrollable */}
       <ScrollView 
         horizontal 
-        showsHorizontalScrollIndicator={false} 
-        style={styles.filterContainer}
-        contentContainerStyle={styles.filterContent}
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterChipsContainer}
+        contentContainerStyle={styles.filterChipsContent}
       >
-        {FILTER_TABS.map((tab) => (
+        {FILTER_CHIPS.map((chip) => (
           <Pressable
-            key={tab.key}
-            style={[styles.filterTab, activeFilter === tab.key && styles.filterTabActive]}
-            onPress={() => setActiveFilter(tab.key)}
+            key={chip.key}
+            style={[
+              styles.filterChip,
+              activeFilter === chip.key && styles.filterChipActive,
+            ]}
+            onPress={() => setActiveFilter(chip.key)}
           >
-            <Text style={[styles.filterTabText, activeFilter === tab.key && styles.filterTabTextActive]}>
-              {tab.labelKannada || tab.label}
+            <Text style={styles.filterChipIcon}>{chip.icon}</Text>
+            <Text style={[
+              styles.filterChipText,
+              activeFilter === chip.key && styles.filterChipTextActive,
+            ]}>
+              {chip.label}
             </Text>
           </Pressable>
         ))}
       </ScrollView>
 
-      {/* Month Navigation */}
-      <View style={styles.monthHeader}>
-        <Pressable onPress={goToPrevMonth} style={styles.navButton}>
-          <Text style={styles.navButtonText}>{'<'}</Text>
-        </Pressable>
-        
-        <View style={styles.monthYearContainer}>
-          <Text style={styles.monthYearText}>{MONTHS[currentMonth]}</Text>
-          <Text style={styles.yearText}>{currentYear}</Text>
-        </View>
-
-        <Pressable 
-          style={styles.viewModeButton}
-          onPress={() => setViewMode(viewMode === 'month' ? '2weeks' : 'month')}
-        >
-          <Text style={styles.viewModeText}>
-            {viewMode === 'month' ? '2 weeks View' : 'Month View'}
+      {/* Selected Date Display */}
+      <View style={styles.selectedDateBanner}>
+        <View style={styles.selectedDateLeft}>
+          <Text style={styles.selectedDateDay}>
+            {selectedDate.getDate()}
           </Text>
-        </Pressable>
-
-        <Pressable onPress={goToNextMonth} style={styles.navButton}>
-          <Text style={styles.navButtonText}>{'>'}</Text>
-        </Pressable>
-      </View>
-
-      {/* Weekday Headers */}
-      <View style={styles.weekdayRow}>
-        {WEEKDAYS.map((day) => (
-          <Text key={day} style={styles.weekdayText}>{day}</Text>
-        ))}
-      </View>
-
-      {/* Calendar Grid */}
-      <View style={styles.calendarGrid}>
-        {calendarDays.map((date, index) => {
-          if (!date) {
-            return <View key={`empty-${index}`} style={styles.dayCell} />;
-          }
-
-          const dayEvents = getEventsForDate(date);
-          const hasEvent = dayEvents.length > 0;
-
-          return (
-            <Pressable
-              key={date.toISOString()}
-              style={[
-                styles.dayCell,
-                isSelected(date) && styles.selectedCell,
-              ]}
-              onPress={() => handleDatePress(date)}
-            >
-              <Text style={[
-                styles.dayText,
-                isToday(date) && styles.todayText,
-                isSelected(date) && styles.selectedDayText,
-              ]}>
-                {date.getDate()}
-              </Text>
-              {hasEvent && <View style={styles.eventDot} />}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Sunrise/Sunset and Samvatsara */}
-      <View style={styles.sunInfoRow}>
-        <View style={styles.sunItem}>
-          <Text style={styles.sunIcon}>🌅</Text>
-          <Text style={styles.sunTime}>{selectedPanchanga.sunriseTime}</Text>
-        </View>
-        <Text style={styles.samvatsaraText}>{selectedPanchanga.samvatsara}</Text>
-        <View style={styles.sunItem}>
-          <Text style={styles.sunIcon}>🌇</Text>
-          <Text style={styles.sunTime}>{selectedPanchanga.sunsetTime}</Text>
-        </View>
-      </View>
-
-      {/* Panchanga Details Grid */}
-      <View style={styles.panchangaGrid}>
-        <View style={styles.panchangaRow}>
-          <View style={[styles.panchangaCell, styles.panchangaCellLeft]}>
-            <Text style={styles.panchangaLabel}>ಆಯನ</Text>
-            <Text style={styles.panchangaValue}>{selectedPanchanga.ayana}</Text>
-          </View>
-          <View style={[styles.panchangaCell, styles.panchangaCellRight]}>
-            <Text style={styles.panchangaLabel}>ಋತು</Text>
-            <Text style={styles.panchangaValue}>{selectedPanchanga.rutu}</Text>
+          <View style={styles.selectedDateInfo}>
+            <Text style={styles.selectedDateWeekday}>
+              {WEEKDAYS_EN[selectedDate.getDay()]}
+            </Text>
+            <Text style={styles.selectedDateSamvatsara}>
+              {selectedPanchanga.samvatsara}
+            </Text>
           </View>
         </View>
-        <View style={styles.panchangaRow}>
-          <View style={[styles.panchangaCell, styles.panchangaCellLeft]}>
-            <Text style={styles.panchangaLabel}>ಮಾಸ</Text>
-            <Text style={styles.panchangaValue}>{selectedPanchanga.masa}</Text>
+        <View style={styles.sunriseSunset}>
+          <View style={styles.sunTimeItem}>
+            <Text style={styles.sunIcon}>☀️</Text>
+            <Text style={styles.sunTime}>{selectedPanchanga.sunriseTime}</Text>
           </View>
-          <View style={[styles.panchangaCell, styles.panchangaCellRight]}>
-            <Text style={styles.panchangaLabel}>ಪಕ್ಷ</Text>
-            <Text style={styles.panchangaValue}>{selectedPanchanga.paksha}</Text>
-          </View>
-        </View>
-        <View style={styles.panchangaRow}>
-          <View style={[styles.panchangaCell, styles.panchangaCellLeft]}>
-            <Text style={styles.panchangaLabel}>ತಿಥಿ</Text>
-            <Text style={styles.panchangaValue}>{selectedPanchanga.tithi}</Text>
-          </View>
-          <View style={[styles.panchangaCell, styles.panchangaCellRight]}>
-            <Text style={styles.panchangaLabel}>ವಾಸರ</Text>
-            <Text style={styles.panchangaValue}>{selectedPanchanga.vasar}</Text>
-          </View>
-        </View>
-        <View style={styles.panchangaRow}>
-          <View style={[styles.panchangaCell, styles.panchangaCellLeft]}>
-            <Text style={styles.panchangaLabel}>ನಕ್ಷತ್ರ</Text>
-            <Text style={styles.panchangaValue}>{selectedPanchanga.nakshatra}</Text>
-          </View>
-          <View style={[styles.panchangaCell, styles.panchangaCellRight]}>
-            <Text style={styles.panchangaLabel}>ಯೋಗ</Text>
-            <Text style={styles.panchangaValue}>{selectedPanchanga.yoga}</Text>
+          <View style={styles.sunTimeItem}>
+            <Text style={styles.sunIcon}>🌙</Text>
+            <Text style={styles.sunTime}>{selectedPanchanga.sunsetTime}</Text>
           </View>
         </View>
       </View>
 
-      {/* Events for selected date */}
-      {getEventsForDate(selectedDate).length > 0 && (
+      {/* Panchanga Cards - Vertical Layout */}
+      <View style={styles.panchangaCardsContainer}>
+        <Text style={styles.panchangaSectionTitle}>ಪಂಚಾಂಗ ವಿವರ</Text>
+        
+        <View style={styles.panchangaCardsGrid}>
+          <PanchangaInfoCard 
+            icon="🌞" 
+            label="ಆಯನ" 
+            labelEn="Ayana"
+            value={selectedPanchanga.ayana} 
+          />
+          <PanchangaInfoCard 
+            icon="🍃" 
+            label="ಋತು" 
+            labelEn="Rutu"
+            value={selectedPanchanga.rutu} 
+          />
+          <PanchangaInfoCard 
+            icon="📅" 
+            label="ಮಾಸ" 
+            labelEn="Masa"
+            value={selectedPanchanga.masa} 
+          />
+          <PanchangaInfoCard 
+            icon="🌓" 
+            label="ಪಕ್ಷ" 
+            labelEn="Paksha"
+            value={selectedPanchanga.paksha} 
+          />
+          <PanchangaInfoCard 
+            icon="🌛" 
+            label="ತಿಥಿ" 
+            labelEn="Tithi"
+            value={selectedPanchanga.tithi} 
+            highlight
+          />
+          <PanchangaInfoCard 
+            icon="📆" 
+            label="ವಾಸರ" 
+            labelEn="Vasar"
+            value={selectedPanchanga.vasar} 
+          />
+          <PanchangaInfoCard 
+            icon="⭐" 
+            label="ನಕ್ಷತ್ರ" 
+            labelEn="Nakshatra"
+            value={selectedPanchanga.nakshatra} 
+            highlight
+          />
+          <PanchangaInfoCard 
+            icon="🕉️" 
+            label="ಯೋಗ" 
+            labelEn="Yoga"
+            value={selectedPanchanga.yoga} 
+          />
+        </View>
+      </View>
+
+      {/* Events Section */}
+      {selectedDateEvents.length > 0 && (
         <View style={styles.eventsSection}>
-          <Text style={styles.eventsSectionTitle}>Events on this day</Text>
-          {getEventsForDate(selectedDate).map((event) => (
+          <Text style={styles.eventsSectionTitle}>
+            📿 Today's Events ({selectedDateEvents.length})
+          </Text>
+          
+          {selectedDateEvents.map((event) => (
             <Pressable
               key={event.id}
               style={styles.eventCard}
               onPress={() => onEventPress?.(event)}
             >
-              <View style={[styles.eventTypeIndicator, { backgroundColor: getEventColor(event.type) }]} />
-              <View style={styles.eventContent}>
+              <View style={[styles.eventTypeBadge, { backgroundColor: getEventColor(event.type) }]}>
+                <Text style={styles.eventTypeText}>{getEventEmoji(event.type)}</Text>
+              </View>
+              <View style={styles.eventDetails}>
                 <Text style={styles.eventTitle}>{event.title}</Text>
                 {event.titleKannada && (
                   <Text style={styles.eventTitleKannada}>{event.titleKannada}</Text>
                 )}
                 {event.location && (
-                  <Text style={styles.eventLocation}>📍 {event.location}</Text>
+                  <View style={styles.eventLocationRow}>
+                    <Text style={styles.eventLocationIcon}>📍</Text>
+                    <Text style={styles.eventLocation}>{event.location}</Text>
+                  </View>
                 )}
               </View>
+              <Text style={styles.eventArrow}>›</Text>
             </Pressable>
           ))}
+        </View>
+      )}
+
+      {/* No Events Placeholder */}
+      {selectedDateEvents.length === 0 && (
+        <View style={styles.noEventsContainer}>
+          <Text style={styles.noEventsEmoji}>🕉️</Text>
+          <Text style={styles.noEventsText}>No special events today</Text>
+          <Text style={styles.noEventsSubtext}>A blessed day for regular worship</Text>
         </View>
       )}
 
@@ -295,240 +343,380 @@ export const PanchangaCalendar: React.FC<PanchangaCalendarProps> = ({
   );
 };
 
+// Panchanga Info Card Component
+interface PanchangaInfoCardProps {
+  icon: string;
+  label: string;
+  labelEn: string;
+  value: string;
+  highlight?: boolean;
+}
+
+const PanchangaInfoCard: React.FC<PanchangaInfoCardProps> = ({ 
+  icon, label, labelEn, value, highlight 
+}) => (
+  <View style={[styles.panchangaCard, highlight && styles.panchangaCardHighlight]}>
+    <Text style={styles.panchangaCardIcon}>{icon}</Text>
+    <View style={styles.panchangaCardContent}>
+      <Text style={styles.panchangaCardLabel}>{label}</Text>
+      <Text style={styles.panchangaCardLabelEn}>{labelEn}</Text>
+    </View>
+    <Text style={[styles.panchangaCardValue, highlight && styles.panchangaCardValueHighlight]}>
+      {value}
+    </Text>
+  </View>
+);
+
 const getEventColor = (type: CalendarEvent['type']): string => {
   switch (type) {
-    case 'aradhana':
-      return '#922B3E';
-    case 'paryaya':
-      return '#6B001A';
-    case 'utsava':
-      return '#D4AF37';
-    case 'ekadashi':
-      return '#4A3728';
-    case 'habba':
-      return '#8B6914';
-    default:
-      return '#6B5344';
+    case 'aradhana': return '#922B3E';
+    case 'paryaya': return '#6B001A';
+    case 'utsava': return '#D4AF37';
+    case 'ekadashi': return '#4A3728';
+    case 'habba': return '#2E7D32';
+    default: return '#6B5344';
+  }
+};
+
+const getEventEmoji = (type: CalendarEvent['type']): string => {
+  switch (type) {
+    case 'aradhana': return '🙏';
+    case 'paryaya': return '🛕';
+    case 'utsava': return '🎊';
+    case 'ekadashi': return '🌙';
+    case 'habba': return '🎉';
+    default: return '📿';
   }
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1918',
+    backgroundColor: '#FFFEF7',
   },
-  filterContainer: {
-    backgroundColor: '#252320',
-  },
-  filterContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  filterTab: {
+  // Month Header
+  monthHeaderSection: {
+    backgroundColor: '#922B3E',
+    paddingTop: 16,
+    paddingBottom: 20,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    borderRadius: 4,
-    backgroundColor: '#2D2A27',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  filterTabActive: {
-    backgroundColor: '#D4AF37',
-  },
-  filterTabText: {
-    color: '#9E9E9E',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  filterTabTextActive: {
-    color: '#1A1918',
-    fontWeight: '700',
-  },
-  monthHeader: {
+  monthHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
   },
-  navButton: {
-    width: 36,
-    height: 36,
+  navArrow: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  navButtonText: {
+  navArrowText: {
     color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: '300',
+    marginTop: -2,
   },
-  monthYearContainer: {
-    alignItems: 'flex-start',
+  monthTitleContainer: {
+    alignItems: 'center',
   },
-  monthYearText: {
+  monthTitleKn: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '700',
   },
-  yearText: {
-    color: '#9E9E9E',
+  yearTitle: {
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
+    marginTop: 2,
   },
-  viewModeButton: {
-    backgroundColor: '#2D2A27',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  // Week Strip
+  weekStripContainer: {
+    marginTop: -12,
+    marginHorizontal: 12,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  viewModeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-  },
-  weekdayRow: {
-    flexDirection: 'row',
+  weekStripContent: {
+    paddingVertical: 12,
     paddingHorizontal: 8,
-    paddingBottom: 8,
   },
-  weekdayText: {
-    flex: 1,
-    textAlign: 'center',
+  dayPill: {
+    width: 52,
+    paddingVertical: 10,
+    marginHorizontal: 4,
+    borderRadius: 16,
+    backgroundColor: '#F8F4ED',
+    alignItems: 'center',
+  },
+  dayPillSelected: {
+    backgroundColor: '#D4AF37',
+  },
+  dayPillToday: {
+    borderWidth: 2,
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFF9E8',
+  },
+  dayPillWeekday: {
+    fontSize: 11,
     color: '#9E9E9E',
-    fontSize: 12,
     fontWeight: '500',
   },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 8,
-  },
-  dayCell: {
-    width: '14.28%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  selectedCell: {
-    backgroundColor: '#D4AF37',
-    borderRadius: 25,
-  },
-  dayText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-  },
-  todayText: {
+  dayPillNumber: {
+    fontSize: 18,
+    color: '#3A2A1E',
     fontWeight: '700',
+    marginTop: 4,
+  },
+  dayPillNumberToday: {
     color: '#D4AF37',
   },
-  selectedDayText: {
-    color: '#1A1918',
-    fontWeight: '700',
+  dayPillTextSelected: {
+    color: '#FFFFFF',
   },
-  eventDot: {
-    position: 'absolute',
-    bottom: 6,
+  eventIndicator: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#922B3E',
+    marginTop: 6,
   },
-  sunInfoRow: {
+  eventIndicatorSelected: {
+    backgroundColor: '#FFFFFF',
+  },
+  // Filter Chips
+  filterChipsContainer: {
+    marginTop: 16,
+  },
+  filterChipsContent: {
+    paddingHorizontal: 12,
+  },
+  filterChip: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: '#F8F4ED',
+    borderWidth: 1,
+    borderColor: '#E8E0D0',
+  },
+  filterChipActive: {
+    backgroundColor: '#922B3E',
+    borderColor: '#922B3E',
+  },
+  filterChipIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  filterChipText: {
+    fontSize: 13,
+    color: '#6B5344',
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  // Selected Date Banner
+  selectedDateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#252320',
     marginHorizontal: 12,
-    marginTop: 12,
-    borderRadius: 8,
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#FFF9E8',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8E0D0',
   },
-  sunItem: {
+  selectedDateLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  selectedDateDay: {
+    fontSize: 42,
+    fontWeight: '800',
+    color: '#922B3E',
+    marginRight: 12,
+  },
+  selectedDateInfo: {},
+  selectedDateWeekday: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3A2A1E',
+  },
+  selectedDateSamvatsara: {
+    fontSize: 12,
+    color: '#6B5344',
+    marginTop: 2,
+  },
+  sunriseSunset: {
+    alignItems: 'flex-end',
+  },
+  sunTimeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   sunIcon: {
-    fontSize: 16,
+    fontSize: 14,
     marginRight: 6,
   },
   sunTime: {
-    color: '#FFFFFF',
-    fontSize: 14,
-  },
-  samvatsaraText: {
-    color: '#D4AF37',
     fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
-    marginHorizontal: 8,
+    color: '#4A3728',
+    fontWeight: '500',
   },
-  panchangaGrid: {
-    margin: 12,
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-    borderRadius: 8,
-    overflow: 'hidden',
+  // Panchanga Cards
+  panchangaCardsContainer: {
+    marginTop: 20,
+    paddingHorizontal: 12,
   },
-  panchangaRow: {
+  panchangaSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#3A2A1E',
+    marginBottom: 12,
+  },
+  panchangaCardsGrid: {
+    gap: 8,
+  },
+  panchangaCard: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#D4AF37',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E0D0',
   },
-  panchangaCell: {
+  panchangaCardHighlight: {
+    backgroundColor: '#FFF9E8',
+    borderColor: '#D4AF37',
+  },
+  panchangaCardIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  panchangaCardContent: {
     flex: 1,
-    padding: 12,
   },
-  panchangaCellLeft: {
-    borderRightWidth: 1,
-    borderRightColor: '#D4AF37',
-  },
-  panchangaCellRight: {},
-  panchangaLabel: {
-    color: '#FF9800',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  panchangaValue: {
-    color: '#FFFFFF',
+  panchangaCardLabel: {
     fontSize: 14,
+    fontWeight: '600',
+    color: '#3A2A1E',
   },
+  panchangaCardLabelEn: {
+    fontSize: 11,
+    color: '#9E9E9E',
+  },
+  panchangaCardValue: {
+    fontSize: 14,
+    color: '#6B5344',
+    fontWeight: '500',
+  },
+  panchangaCardValueHighlight: {
+    color: '#922B3E',
+    fontWeight: '700',
+  },
+  // Events Section
   eventsSection: {
-    margin: 12,
+    marginTop: 24,
+    paddingHorizontal: 12,
   },
   eventsSectionTitle: {
-    color: '#D4AF37',
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
+    fontWeight: '700',
+    color: '#3A2A1E',
+    marginBottom: 12,
   },
   eventCard: {
     flexDirection: 'row',
-    backgroundColor: '#252320',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 8,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E8E0D0',
   },
-  eventTypeIndicator: {
-    width: 4,
+  eventTypeBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  eventContent: {
+  eventTypeText: {
+    fontSize: 20,
+  },
+  eventDetails: {
     flex: 1,
-    padding: 12,
   },
   eventTitle: {
-    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+    color: '#3A2A1E',
   },
   eventTitleKannada: {
-    color: '#9E9E9E',
     fontSize: 12,
+    color: '#6B5344',
     marginTop: 2,
   },
-  eventLocation: {
-    color: '#D4AF37',
+  eventLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  eventLocationIcon: {
     fontSize: 12,
+    marginRight: 4,
+  },
+  eventLocation: {
+    fontSize: 11,
+    color: '#9E9E9E',
+  },
+  eventArrow: {
+    fontSize: 20,
+    color: '#D4AF37',
+    marginLeft: 8,
+  },
+  // No Events
+  noEventsContainer: {
+    alignItems: 'center',
+    marginTop: 24,
+    paddingVertical: 32,
+    marginHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8E0D0',
+  },
+  noEventsEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  noEventsText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#3A2A1E',
+  },
+  noEventsSubtext: {
+    fontSize: 13,
+    color: '#9E9E9E',
     marginTop: 4,
   },
   bottomPadding: {

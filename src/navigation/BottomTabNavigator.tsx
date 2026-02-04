@@ -2,19 +2,12 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
-import { Home, Panchanga } from '@/screens';
+import { Home, Panchanga, HistoryScreen } from '@/screens';
 
 // Placeholder screens for future implementation
 const StortraScreen = () => (
   <View style={styles.placeholder}>
     <Text style={styles.placeholderText}>Stotra</Text>
-    <Text style={styles.placeholderSubText}>Coming Soon</Text>
-  </View>
-);
-
-const VideosScreen = () => (
-  <View style={styles.placeholder}>
-    <Text style={styles.placeholderText}>Videos</Text>
     <Text style={styles.placeholderSubText}>Coming Soon</Text>
   </View>
 );
@@ -28,9 +21,9 @@ const FeedScreen = () => (
 
 type TabParamList = {
   HomeTab: undefined;
+  HistoryTab: undefined;
   PanchangaTab: undefined;
   StotraTab: undefined;
-  VideosTab: undefined;
   FeedTab: undefined;
 };
 
@@ -38,9 +31,9 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 const TAB_ICONS: Record<string, string> = {
   HomeTab: '🏠',
+  HistoryTab: '📜',
   PanchangaTab: '📅',
   StotraTab: 'ॐ',
-  VideosTab: '▶️',
   FeedTab: '📋',
 };
 
@@ -68,6 +61,11 @@ export const BottomTabNavigator = () => {
         options={{ tabBarLabel: 'Home' }}
       />
       <Tab.Screen 
+        name="HistoryTab" 
+        component={HistoryScreen}
+        options={{ tabBarLabel: 'History' }}
+      />
+      <Tab.Screen 
         name="PanchangaTab" 
         component={Panchanga}
         options={{ tabBarLabel: 'Panchanga' }}
@@ -76,11 +74,6 @@ export const BottomTabNavigator = () => {
         name="StotraTab" 
         component={StortraScreen}
         options={{ tabBarLabel: 'Stotra' }}
-      />
-      <Tab.Screen 
-        name="VideosTab" 
-        component={VideosScreen}
-        options={{ tabBarLabel: 'Videos' }}
       />
       <Tab.Screen 
         name="FeedTab" 
