@@ -1,9 +1,17 @@
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { storage } from '@/App';
 
 /**
  * Firebase Authentication Service
  * Handles OTP-based authentication for Indian mobile numbers
  */
+
+// MOCK MODE - Set to true to use dummy OTP for development
+const MOCK_AUTH_MODE = true;
+const MOCK_OTP = '123456';
+
+// Mock user storage key
+const MOCK_USER_KEY = 'mock_authenticated_user';
 
 export class FirebaseAuthService {
   /**
@@ -13,6 +21,39 @@ export class FirebaseAuthService {
    */
   async sendOTP(phoneNumber: string): Promise<FirebaseAuthTypes.ConfirmationResult> {
     try {
+      // MOCK MODE: Return a dummy confirmation for development
+      if (MOCK_AUTH_MODE) {
+        console.log('🔧 MOCK MODE: OTP sent successfully. Use OTP: ' + MOCK_OTP);
+        return {
+          verificationId: 'mock-verification-id',
+          confirm: async (code: string) => {
+            if (code === MOCK_OTP) {
+              console.log('✅ MOCK MODE: OTP verified successfully');
+              
+              // Store mock user in MMKV to simulate authentication
+              const mockUser = {
+                uid: 'mock-user-id',
+                phoneNumber: `+91${phoneNumber}`,
+                displayName: null,
+                email: null,
+                photoURL: null,
+                providerId: 'phone',
+              };
+              
+              storage.set(MOCK_USER_KEY, JSON.stringify(mockUser));
+              storage.set('isLoggedIn', true);
+              storage.set('userId', mockUser.uid);
+              
+              return {
+                user: mockUser as any,
+              } as FirebaseAuthTypes.UserCredential;
+            } else {
+              throw new Error('Invalid OTP. Use: ' + MOCK_OTP);
+            }
+          },
+        } as any;
+      }
+      
       const fullPhoneNumber = `+91${phoneNumber}`;
       
       // For development: Enable phone auth testing
@@ -53,6 +94,14 @@ export class FirebaseAuthService {
    * @returns Current user or null
    */
   getCurrentUser(): FirebaseAuthTypes.User | null {
+    // MOCK MODE: Return a mock user if stored
+    if (MOCK_AUTH_MODE) {
+      const mockUserData = storage.getString(MOCK_USER_KEY);
+      if (mockUserData) {
+        return JSON.parse(mockUserData) as any;
+      }
+      return null;
+    }
     return auth().currentUser;
   }
   
@@ -61,6 +110,15 @@ export class FirebaseAuthService {
    */
   async signOut(): Promise<void> {
     try {
+      if (MOCK_AUTH_MODE) {
+        // Clear mock user data
+        storage.delete(MOCK_USER_KEY);
+        storage.delete('isLoggedIn');
+        storage.delete('userId');
+        console.log('🔧 MOCK MODE: User signed out');
+        return;
+      }
+      
       await auth().signOut();
     } catch (error) {
       console.error('Error signing out:', error);

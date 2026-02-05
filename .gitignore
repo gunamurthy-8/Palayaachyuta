@@ -83,6 +83,7 @@ yarn-error.log
 # Firebase
 google-services.json
 GoogleService-Info.plist
+firebase-admin-key.json
 .firebase/
 firebase-debug.log
 firestore-debug.log

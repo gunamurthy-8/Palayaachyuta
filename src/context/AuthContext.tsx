@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { storage } from '@/App';
+import { firebaseAuth } from '@/services/firebase';
 
 interface AuthContextType {
   user: FirebaseAuthTypes.User | null;
@@ -27,30 +28,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Subscribe to auth state changes
-    const unsubscribe = auth().onAuthStateChanged((firebaseUser) => {
-      setUser(firebaseUser);
-      
-      // Store auth state in MMKV for quick access
-      if (firebaseUser) {
-        storage.set('isLoggedIn', true);
-        storage.set('userId', firebaseUser.uid);
-      } else {
-        storage.delete('isLoggedIn');
-        storage.delete('userId');
-      }
-      
-      setIsLoading(false);
-    });
+    // Check initial auth state
+    const initialUser = firebaseAuth.getCurrentUser();
+    setUser(initialUser);
+    setIsLoading(false);
 
-    return unsubscribe;
+    // Set up polling for auth state changes (checks every 500ms)
+    // This works for both mock mode and real Firebase
+    const pollInterval = setInterval(() => {
+      const currentUser = firebaseAuth.getCurrentUser();
+      setUser(currentUser);
+    }, 500);
+
+    return () => clearInterval(pollInterval);
   }, []);
 
   const signOut = async () => {
     try {
-      await auth().signOut();
-      storage.delete('isLoggedIn');
-      storage.delete('userId');
+      await firebaseAuth.signOut();
+      setUser(null);
     } catch (error) {
       console.error('Sign out error:', error);
     }

@@ -1,13 +1,15 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 
 import { Home, Panchanga, HistoryScreen } from '@/screens';
+import { StotraListScreen, StotraDetailScreen } from '@/screens/Stotra';
 
 // Placeholder screens for future implementation
-const StortraScreen = () => (
+const VideosScreen = () => (
   <View style={styles.placeholder}>
-    <Text style={styles.placeholderText}>Stotra</Text>
+    <Text style={styles.placeholderText}>Videos</Text>
     <Text style={styles.placeholderSubText}>Coming Soon</Text>
   </View>
 );
@@ -18,6 +20,18 @@ const FeedScreen = () => (
     <Text style={styles.placeholderSubText}>Coming Soon</Text>
   </View>
 );
+
+// Stotra Stack Navigator
+const StotraStack = createStackNavigator();
+
+const StotraStackNavigator = () => {
+  return (
+    <StotraStack.Navigator screenOptions={{ headerShown: false }}>
+      <StotraStack.Screen name="StotraList" component={StotraListScreen} />
+      <StotraStack.Screen name="StotraDetail" component={StotraDetailScreen} />
+    </StotraStack.Navigator>
+  );
+};
 
 type TabParamList = {
   HomeTab: undefined;
@@ -72,7 +86,7 @@ export const BottomTabNavigator = () => {
       />
       <Tab.Screen 
         name="StotraTab" 
-        component={StortraScreen}
+        component={StotraStackNavigator}
         options={{ tabBarLabel: 'Stotra' }}
       />
       <Tab.Screen 

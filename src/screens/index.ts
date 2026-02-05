@@ -10,3 +10,4 @@ export { GalleryScreen, AlbumDetailScreen } from './Gallery';
 export { ArtefactsScreen, ArtefactDetailScreen } from './Artefacts';
 export { RoomBookingScreen } from './RoomBooking';
 export { SevasScreen, DevoteeFormScreen } from './Sevas';
+export * from './Stotra';
